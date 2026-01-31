@@ -1,951 +1,296 @@
-local redzlib = loadstring(game:HttpGet("https://raw.githubusercontent.com/tbao143/Library-ui/refs/heads/main/Redzhubui"))()
-
-local Window = redzlib:MakeWindow({
-
-  Title = "Painel Xit | by i'am silva",
-
-  SubTitle = "by i'am silva",
-
-  SaveFolder = "painelxiti.lua"
-
-})
-
-Window:AddMinimizeButton({
-
-    Button = { Image = "rbxassetid://71014873973869", BackgroundTransparency = 0 },
-
-    Corner = { CornerRadius = UDim.new(35, 1) },
-
-})
-
-local Tab1 = Window:MakeTab({"AIMBOT", "FUNÇÕES AIMBOT + ESP"})
-
-Tab1:AddButton({"Aimbot Script|by i'am silva", function(Value)
-
--- Camera Lock-On System
-
--- LocalScript should be placed in StarterPlayerScripts
-
+--// SERVICES
 local Players = game:GetService("Players")
-
 local RunService = game:GetService("RunService")
-
-local UserInputService = game:GetService("UserInputService")
-
-local Workspace = game:GetService("Workspace")
-
-local player = Players.LocalPlayer
-
-local camera = Workspace.CurrentCamera
-
-local mouse = player:GetMouse()
-
--- Configuration
-
-local LOCK_ON_RANGE = 100 -- Studs
-
-local LOCK_SMOOTHNESS = 0.25 -- Lower = smoother, higher = snappier
-
-local MAX_ANGLE = 60 -- Maximum angle from camera forward to consider for lock-on
-
--- State management
-
-local isLockedOn = false
-
-local currentTarget = nil
-
-local lockOnButtonDown = false
-
--- Create GUI for mobile
-
-local function createMobileUI()
-
-	if UserInputService.TouchEnabled then		local gui = Instance.new("ScreenGui")
-
-		gui.Name = "LockOnUI"
-
-		gui.Parent = player.PlayerGui
-
-		
-
-		local button = Instance.new("TextButton")
-
-		button.Name = "LockOnButton"
-
-		button.Text = "🔒\nLock On"
-
-		button.TextScaled = true
-
-		button.Size = UDim2.new(0, 100, 0, 100)
-
-		button.Position = UDim2.new(1, -120, 1, -120)
-
-		button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-
-		button.BackgroundTransparency = 0.3
-
-		button.TextColor3 = Color3.fromRGB(255, 255, 255)
-
-		button.BorderSizePixel = 0
-
-		button.Parent = gui
-
-		
-
-		-- Button events
-
-		button.Activated:Connect(function()
-
-			isLockedOn = not isLockedOn
-
-			if not isLockedOn then
-
-				currentTarget = nil
-
-			end
-
-			updateButtonAppearance(button)
-
-		end)
-
-		
-
-		-- Update button appearance based on state
-
-		function updateButtonAppearance(btn)
-
-			if isLockedOn then
-
-				btn.BackgroundColor3 = Color3.fromRGB(0, 120, 255)
-
-				btn.Text = "🔒\nLocked"
-
-			else
-
-				btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-
-				btn.Text = "🔒\nLock On"
-
-			end
-
-		end
-
-	end
-
-end
-
--- Check if a target is visible (not behind walls)
-
-local function isTargetVisible(targetHead)
-
-	if not targetHead then return false end
-
-	
-
-	local cameraPos = camera.CFrame.Position
-
-	local targetPos = targetHead.Position
-
-	
-
-	-- Raycast to check for obstructions
-
-	local raycastParams = RaycastParams.new()
-
-	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-
-	raycastParams.FilterDescendantsInstances = {player.Character, targetHead.Parent}
-
-	raycastParams.IgnoreWater = true
-
-	
-
-	local raycastResult = Workspace:Raycast(cameraPos, targetPos - cameraPos, raycastParams)
-
-	
-
-	-- If we hit nothing, or we hit the target or something in the target's model, it's visible
-
-	if not raycastResult then
-
-		return true
-
-	end
-
-	
-
-	-- Check if what we hit is part of the target character
-
-	local hitPart = raycastResult.Instance
-
-	if hitPart and hitPart:IsDescendantOf(targetHead.Parent) then
-
-		return true
-
-	end
-
-	
-
-	return false
-
-end
-
--- Find the best target to lock onto
-
-local function findBestTarget()
-
-	if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
-
-		return nil
-
-	end
-
-	
-
-	local playerPosition = player.Character.HumanoidRootPart.Position
-
-	local bestTarget = nil
-
-	local bestScore = 0
-
-	
-
-	for _, otherPlayer in ipairs(Players:GetPlayers()) do
-
-		if otherPlayer ~= player and otherPlayer.Character then
-
-			local humanoid = otherPlayer.Character:FindFirstChild("Humanoid")
-
-			local head = otherPlayer.Character:FindFirstChild("Head")
-
-			local root = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
-
-			
-
-			if humanoid and humanoid.Health > 0 and head and root then
-
-				-- Check distance
-
-				local distance = (root.Position - playerPosition).Magnitude
-
-				if distance <= LOCK_ON_RANGE then
-
-					-- Check visibility
-
-					if isTargetVisible(head) then
-
-						-- Check if target is within camera view angle
-
-						local cameraDirection = camera.CFrame.LookVector
-
-						local toTarget = (head.Position - camera.CFrame.Position).Unit
-
-						local angle = math.deg(math.acos(cameraDirection:Dot(toTarget)))
-
-						
-
-						if angle <= MAX_ANGLE then
-
-							-- Calculate score (closer targets and more centered targets score higher)
-
-							local distanceScore = (LOCK_ON_RANGE - distance) / LOCK_ON_RANGE
-
-							local angleScore = (MAX_ANGLE - angle) / MAX_ANGLE
-
-							local totalScore = distanceScore * 0.6 + angleScore * 0.4
-
-							
-
-							if totalScore > bestScore then
-
-								bestScore = totalScore
-
-								bestTarget = head
-
-							end
-
-						end
-
-					end
-
-				end
-
-			end
-
-		end
-
-	end
-
-	
-
-	return bestTarget
-
-end
-
--- Update camera lock
-
-local function updateCameraLock()
-
-	if not isLockedOn then return end
-
-	
-
-	-- If we have no current target, try to find one
-
-	if not currentTarget or not currentTarget.Parent then
-
-		currentTarget = findBestTarget()
-
-		if not currentTarget then return end
-
-	end
-
-	
-
-	-- Verify current target is still valid
-
-	local targetCharacter = currentTarget.Parent
-
-	local humanoid = targetCharacter:FindFirstChild("Humanoid")
-
-	
-
-	if not humanoid or humanoid.Health <= 0 then
-
-		currentTarget = findBestTarget()
-
-		if not currentTarget then return end
-
-		targetCharacter = currentTarget.Parent
-
-		humanoid = targetCharacter:FindFirstChild("Humanoid")
-
-	end
-
-	
-
-	if not humanoid or humanoid.Health <= 0 then
-
-		currentTarget = nil
-
-		return
-
-	end
-
-	
-
-	-- Check if current target is still visible and in range
-
-	local playerPosition = player.Character and player.Character:FindFirstChild("HumanoidRootPart") 
-
-		and player.Character.HumanoidRootPart.Position or Vector3.new(0, 0, 0)
-
-	
-
-	local distance = (currentTarget.Position - playerPosition).Magnitude
-
-	if distance > LOCK_ON_RANGE or not isTargetVisible(currentTarget) then
-
-		currentTarget = findBestTarget()
-
-		if not currentTarget then return end
-
-	end
-
-	
-
-	-- Smoothly lerp camera to look at target
-
-	local currentCFrame = camera.CFrame
-
-	local targetPosition = currentTarget.Position
-
-	local lookVector = (targetPosition - currentCFrame.Position).Unit
-
-	
-
-	-- Create new CFrame looking at target, maintaining current camera distance
-
-	local newCFrame = CFrame.new(currentCFrame.Position, 
-
-		currentCFrame.Position + lookVector)
-
-	
-
-	camera.CFrame = currentCFrame:Lerp(newCFrame, LOCK_SMOOTHNESS)
-
-end
-
--- Input handling for PC
-
-local function setupPCControls()
-
-	UserInputService.InputBegan:Connect(function(input, processed)
-
-		if processed then return end
-
-		
-
-		if input.KeyCode == Enum.KeyCode.Q then
-
-			isLockedOn = not isLockedOn
-
-			if not isLockedOn then
-
-				currentTarget = nil
-
-			end
-
-		end
-
-	end)
-
-	
-
-	-- Target cycling with E and Q
-
-	UserInputService.InputBegan:Connect(function(input, processed)
-
-		if not isLockedOn or processed then return end
-
-		
-
-		if input.KeyCode == Enum.KeyCode.E then
-
-			-- Find all valid targets
-
-			local targets = {}
-
-			local playerPosition = player.Character and player.Character:FindFirstChild("HumanoidRootPart") 
-
-				and player.Character.HumanoidRootPart.Position or Vector3.new(0, 0, 0)
-
-			
-
-			for _, otherPlayer in ipairs(Players:GetPlayers()) do
-
-				if otherPlayer ~= player and otherPlayer.Character then
-
-					local head = otherPlayer.Character:FindFirstChild("Head")
-
-					local humanoid = otherPlayer.Character:FindFirstChild("Humanoid")
-
-					
-
-					if head and humanoid and humanoid.Health > 0 then
-
-						local distance = (head.Position - playerPosition).Magnitude
-
-						if distance <= LOCK_ON_RANGE and isTargetVisible(head) then
-
-							table.insert(targets, head)
-
-						end
-
-					end
-
-				end
-
-			end
-
-			
-
-			if #targets > 0 then
-
-				-- Cycle to next target
-
-				local foundCurrent = false
-
-				local nextTarget = nil
-
-				
-
-				for i, target in ipairs(targets) do
-
-					if currentTarget == target then
-
-						foundCurrent = true
-
-						nextTarget = targets[(i % #targets) + 1]
-
-						break
-
-					end
-
-				end
-
-				
-
-				if not foundCurrent then
-
-					nextTarget = targets[1]
-
-				end
-
-				
-
-				currentTarget = nextTarget
-
-			end
-
-		end
-
-	end)
-
-end
-
--- Create indicator for current target
-
-local function createTargetIndicator()
-
-	local indicator = Instance.new("BillboardGui")
-
-	indicator.Name = "TargetIndicator"
-
-	indicator.Size = UDim2.new(4, 0, 4, 0)
-
-	indicator.AlwaysOnTop = true
-
-	indicator.Enabled = false
-
-	
-
-	local frame = Instance.new("Frame")
-
-	frame.Size = UDim2.new(1, 0, 1, 0)
-
-	frame.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-
-	frame.BackgroundTransparency = 0.5
-
-	frame.BorderSizePixel = 0
-
-	frame.Parent = indicator
-
-	
-
-	return indicator
-
-end
-
--- Main update loop
-
-local function startUpdateLoop()
-
-	local targetIndicator = createTargetIndicator()
-
-	
-
-	RunService.RenderStepped:Connect(function()
-
-		if isLockedOn then
-
-			updateCameraLock()
-
-			
-
-			-- Update target indicator
-
-			if currentTarget and currentTarget.Parent then
-
-				if not targetIndicator.Parent then
-
-					targetIndicator.Parent = currentTarget
-
-				elseif targetIndicator.Parent ~= currentTarget then
-
-					targetIndicator.Parent = currentTarget
-
-				end
-
-				targetIndicator.Enabled = true
-
-			else
-
-				targetIndicator.Enabled = false
-
-			end
-
-		else
-
-			targetIndicator.Enabled = false
-
-		end
-
-	end)
-
-end
-
--- Initialize
-
-local function init()
-
-	-- Wait for player to load
-
-	repeat
-
-		wait()
-
-	until player.Character and player.Character:FindFirstChild("Humanoid")
-
-	
-
-	-- Create UI
-
-	createMobileUI()
-
-	
-
-	-- Setup controls
-
-	setupPCControls()
-
-	
-
-	-- Start update loop
-
-	startUpdateLoop()
-
-	
-
-	-- Instructions
-
-	print("Camera Lock-On System Loaded!")
-
-	print("PC Controls:")
-
-	print("  - Press Q to toggle lock-on")
-
-	print("  - Press E to cycle targets when locked on")
-
-	print("Mobile: Use the lock-on button on screen")
-
-end
-
--- Character added/removed handling
-
-player.CharacterAdded:Connect(init)
-
-if player.Character then
-
-	init()
-
-end
-
-end})
-
-Tab1:AddButton({"ESP LINHAS", function(Value)
-
--- Coloque este LocalScript em StarterPlayerScripts ou StarterGui
-
-local Players = game:GetService("Players")
-
-local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
 
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
--- Configurações
+--// BLUR
+local Blur = Instance.new("BlurEffect")
+Blur.Size = 0
+Blur.Parent = Lighting
 
-local ESP_COLOR = Color3.fromRGB(0, 255, 0)  -- Cor verde
+--// GUI
+local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
+ScreenGui.IgnoreGuiInset = true
 
-local LINE_THICKNESS = 1
+--// OPEN BUTTON
+local OpenButton = Instance.new("TextButton", ScreenGui)
+OpenButton.Size = UDim2.new(0, 55, 0, 55)
+OpenButton.Position = UDim2.new(0, 20, 0.5, -30)
+OpenButton.Text = "≡"
+OpenButton.TextSize = 26
+OpenButton.BackgroundColor3 = Color3.fromRGB(130, 0, 200)
+OpenButton.TextColor3 = Color3.new(1,1,1)
+OpenButton.Active = true
+OpenButton.Draggable = true
+Instance.new("UICorner", OpenButton).CornerRadius = UDim.new(1,0)
 
-local UPDATE_INTERVAL = 0.1  -- Atualiza a cada 0.1 segundos
+--// MAIN UI
+local Main = Instance.new("Frame", ScreenGui)
+Main.Size = UDim2.new(0, 0, 0, 0)
+Main.Position = UDim2.new(0.5, -260, 0.5, -180)
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 40)
+Main.Visible = false
+Main.Active = true
+Main.Draggable = true
+Main.BorderSizePixel = 0
+Instance.new("UICorner", Main).CornerRadius = UDim.new(0,14)
 
--- Armazenamento
+--// TITLE
+local Title = Instance.new("TextLabel", Main)
+Title.Size = UDim2.new(1,0,0,42)
+Title.BackgroundColor3 = Color3.fromRGB(90, 0, 160)
+Title.Text = "Purple Dark Hub"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 18
+Title.TextColor3 = Color3.new(1,1,1)
 
-local espLines = {}  -- [player] = line
+--// TOGGLE UI
+local function ToggleUI(state)
+	Main.Visible = true
+	TweenService:Create(Main, TweenInfo.new(0.35), {
+		Size = state and UDim2.new(0,520,0,360) or UDim2.new(0,0,0,0)
+	}):Play()
 
-local espConnections = {}  -- Conexões para cleanup
+	TweenService:Create(Blur, TweenInfo.new(0.35), {
+		Size = state and 18 or 0
+	}):Play()
 
--- Função para criar uma linha ESP
-
-local function createLine(player)
-
-    if espLines[player] then return end
-
-    
-
-    local line = Drawing.new("Line")
-
-    line.Visible = false
-
-    line.Color = ESP_COLOR
-
-    line.Thickness = LINE_THICKNESS
-
-    line.ZIndex = 1
-
-    
-
-    espLines[player] = line
-
-    
-
-    -- Conectar para remover quando o player sair
-
-    local connection = player:GetPropertyChangedSignal("Parent"):Connect(function()
-
-        if not player.Parent then
-
-            cleanupPlayer(player)
-
-        end
-
-    end)
-
-    table.insert(espConnections, connection)
-
+	task.wait(0.35)
+	Main.Visible = state
 end
 
--- Função para remover ESP de um player
-
-local function cleanupPlayer(player)
-
-    if espLines[player] then
-
-        espLines[player]:Remove()
-
-        espLines[player] = nil
-
-    end
-
-    
-
-    -- Remover conexões associadas
-
-    for i, conn in ipairs(espConnections) do
-
-        if not conn.Connected then
-
-            table.remove(espConnections, i)
-
-            break
-
-        end
-
-    end
-
-end
-
--- Função para atualizar todas as linhas
-
-local function updateESP()
-
-    local camera = workspace.CurrentCamera
-
-    if not camera then return end
-
-    
-
-    local localChar = LocalPlayer.Character
-
-    if not localChar then return end
-
-    
-
-    local localRoot = localChar:FindFirstChild("HumanoidRootPart")
-
-    if not localRoot then return end
-
-    
-
-    for _, player in ipairs(Players:GetPlayers()) do
-
-        if player ~= LocalPlayer and player.Character then
-
-            local char = player.Character
-
-            local humanoid = char:FindFirstChild("Humanoid")
-
-            local rootPart = char:FindFirstChild("HumanoidRootPart")
-
-            
-
-            -- Criar linha se não existir
-
-            if not espLines[player] then
-
-                createLine(player)
-
-            end
-
-            
-
-            local line = espLines[player]
-
-            
-
-            -- Verificar se o player está morto
-
-            if humanoid and humanoid.Health <= 0 then
-
-                line.Visible = false
-
-                cleanupPlayer(player)
-
-            elseif rootPart then
-
-                -- Calcular posições na tela
-
-                local rootPos, rootVisible = camera:WorldToViewportPoint(rootPart.Position)
-
-                local localPos, localVisible = camera:WorldToViewportPoint(localRoot.Position)
-
-                
-
-                -- Mostrar/ocultar baseado na visibilidade
-
-                if rootVisible and localVisible then
-
-                    line.From = Vector2.new(localPos.X, localPos.Y)
-
-                    line.To = Vector2.new(rootPos.X, rootPos.Y)
-
-                    line.Visible = true
-
-                else
-
-                    line.Visible = false
-
-                end
-
-            else
-
-                line.Visible = false
-
-            end
-
-        elseif espLines[player] then
-
-            -- Player sem personagem ou morto
-
-            espLines[player].Visible = false
-
-            cleanupPlayer(player)
-
-        end
-
-    end
-
-end
-
--- Gerenciar players entrando/saindo
-
-local function playerAdded(player)
-
-    if player ~= LocalPlayer then
-
-        createLine(player)
-
-        
-
-        -- Conectar morte do player
-
-        local conn
-
-        conn = player.CharacterAdded:Connect(function(char)
-
-            task.wait(0.5)  -- Esperar personagem carregar
-
-            if espLines[player] then
-
-                espLines[player].Visible = true
-
-            end
-
-        end)
-
-        table.insert(espConnections, conn)
-
-        
-
-        -- Conectar quando personagem for removido
-
-        local conn2 = player.CharacterRemoving:Connect(function()
-
-            if espLines[player] then
-
-                espLines[player].Visible = false
-
-            end
-
-        end)
-
-        table.insert(espConnections, conn2)
-
-    end
-
-end
-
-local function playerRemoving(player)
-
-    cleanupPlayer(player)
-
-end
-
--- Inicializar para players existentes
-
-for _, player in ipairs(Players:GetPlayers()) do
-
-    playerAdded(player)
-
-end
-
--- Conectar eventos
-
-Players.PlayerAdded:Connect(playerAdded)
-
-Players.PlayerRemoving:Connect(playerRemoving)
-
--- Loop de atualização
-
-local updateConnection
-
-updateConnection = RunService.RenderStepped:Connect(function(deltaTime)
-
-    pcall(updateESP)  -- Usar pcall para evitar erros
-
+OpenButton.MouseButton1Click:Connect(function()
+	ToggleUI(not Main.Visible)
 end)
 
--- Cleanup quando o script for destruído
+--// TABS
+local Tabs = Instance.new("Frame", Main)
+Tabs.Size = UDim2.new(0, 130, 1, -42)
+Tabs.Position = UDim2.new(0, 0, 0, 42)
+Tabs.BackgroundColor3 = Color3.fromRGB(30, 30, 60)
+Tabs.BorderSizePixel = 0
 
-local function cleanup()
+local TabLayout = Instance.new("UIListLayout", Tabs)
+TabLayout.Padding = UDim.new(0,6)
 
-    if updateConnection then
+local Pages = {}
 
-        updateConnection:Disconnect()
+local function CreateTab(name)
+	local btn = Instance.new("TextButton", Tabs)
+	btn.Size = UDim2.new(1, -10, 0, 36)
+	btn.Text = name
+	btn.BackgroundColor3 = Color3.fromRGB(110, 0, 180)
+	btn.TextColor3 = Color3.new(1,1,1)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 13
 
-    end
+	local page = Instance.new("Frame", Main)
+	page.Size = UDim2.new(1, -140, 1, -42)
+	page.Position = UDim2.new(0, 140, 0, 42)
+	page.Visible = false
+	page.BackgroundTransparency = 1
 
-    
+	Pages[name] = page
 
-    for _, conn in ipairs(espConnections) do
+	btn.MouseButton1Click:Connect(function()
+		for _,v in pairs(Pages) do v.Visible = false end
+		page.Visible = true
+	end)
 
-        conn:Disconnect()
-
-    end
-
-    
-
-    for player, line in pairs(espLines) do
-
-        line:Remove()
-
-    end
-
-    
-
-    espLines = {}
-
-    espConnections = {}
-
+	return page
 end
 
--- Conectar para cleanup
+--// CREATE TABS
+local ViewTab = CreateTab("View Players")
+local LocalTab = CreateTab("LocalPlayer")
+local ESPTab = CreateTab("ESP")
+ViewTab.Visible = true
 
-script.Destroying:Connect(cleanup)
+--// ================= VIEW PLAYERS =================
+local PlayerList = Instance.new("ScrollingFrame", ViewTab)
+PlayerList.Size = UDim2.new(1, -20, 1, -60)
+PlayerList.Position = UDim2.new(0, 10, 0, 10)
+PlayerList.CanvasSize = UDim2.new(0,0,0,0)
+PlayerList.BackgroundTransparency = 1
 
-LocalPlayer.CharacterRemoving:Connect(cleanup)
+local ListLayout = Instance.new("UIListLayout", PlayerList)
+ListLayout.Padding = UDim.new(0,6)
 
-end})
+ListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	PlayerList.CanvasSize = UDim2.new(0,0,0,ListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+local function Spectate(plr)
+	if plr.Character and plr.Character:FindFirstChild("Humanoid") then
+		Camera.CameraSubject = plr.Character.Humanoid
+	end
+end
+
+local function ResetCamera()
+	if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+		Camera.CameraSubject = LocalPlayer.Character.Humanoid
+	end
+end
+
+local function RefreshPlayers()
+	for _,v in pairs(PlayerList:GetChildren()) do
+		if v:IsA("TextButton") then v:Destroy() end
+	end
+
+	for _,plr in pairs(Players:GetPlayers()) do
+		if plr ~= LocalPlayer then
+			local btn = Instance.new("TextButton", PlayerList)
+			btn.Size = UDim2.new(1, -10, 0, 34)
+			btn.Text = "👁 "..plr.Name
+			btn.BackgroundColor3 = Color3.fromRGB(80, 0, 140)
+			btn.TextColor3 = Color3.new(1,1,1)
+			btn.Font = Enum.Font.Gotham
+			btn.TextSize = 13
+			Instance.new("UICorner", btn)
+
+			btn.MouseButton1Click:Connect(function()
+				Spectate(plr)
+			end)
+		end
+	end
+end
+
+RefreshPlayers()
+Players.PlayerAdded:Connect(RefreshPlayers)
+Players.PlayerRemoving:Connect(function()
+	RefreshPlayers()
+	ResetCamera()
+end)
+
+local BackBtn = Instance.new("TextButton", ViewTab)
+BackBtn.Size = UDim2.new(0, 180, 0, 36)
+BackBtn.Position = UDim2.new(0, 10, 1, -44)
+BackBtn.Text = "Voltar para você"
+BackBtn.BackgroundColor3 = Color3.fromRGB(140, 0, 200)
+BackBtn.TextColor3 = Color3.new(1,1,1)
+BackBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", BackBtn)
+BackBtn.MouseButton1Click:Connect(ResetCamera)
+
+--// ================= LOCALPLAYER =================
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+	Character = char
+	Humanoid = char:WaitForChild("Humanoid")
+end)
+
+local function LPButton(text, y, func)
+	local btn = Instance.new("TextButton", LocalTab)
+	btn.Size = UDim2.new(0, 200, 0, 36)
+	btn.Position = UDim2.new(0, 10, 0, y)
+	btn.Text = text
+	btn.BackgroundColor3 = Color3.fromRGB(120, 0, 190)
+	btn.TextColor3 = Color3.new(1,1,1)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 13
+	Instance.new("UICorner", btn)
+	btn.MouseButton1Click:Connect(func)
+end
+
+LPButton("Speed 50", 10, function()
+	Humanoid.WalkSpeed = 50
+end)
+
+LPButton("JumpPower 100", 56, function()
+	Humanoid.JumpPower = 100
+end)
+
+local Noclip = false
+local NoclipConn
+
+LPButton("Toggle Noclip", 102, function()
+	Noclip = not Noclip
+	if Noclip then
+		NoclipConn = RunService.Stepped:Connect(function()
+			for _,v in pairs(Character:GetDescendants()) do
+				if v:IsA("BasePart") then
+					v.CanCollide = false
+				end
+			end
+		end)
+	else
+		if NoclipConn then NoclipConn:Disconnect() end
+	end
+end)
+
+LPButton("Resetar Status", 148, function()
+	Humanoid.WalkSpeed = 16
+	Humanoid.JumpPower = 50
+end)
+
+--// ================= ESP =================
+local ESPEnabled = false
+local ESPObjects = {}
+
+local function ClearESP(plr)
+	if ESPObjects[plr] then
+		for _,v in pairs(ESPObjects[plr]) do
+			if v then v:Destroy() end
+		end
+		ESPObjects[plr] = nil
+	end
+end
+
+local function CreateESP(plr)
+	if plr == LocalPlayer then return end
+	ESPObjects[plr] = {}
+
+	RunService.RenderStepped:Connect(function()
+		if not ESPEnabled or not plr.Character or not plr.Character:FindFirstChild("Head") then
+			ClearESP(plr)
+			return
+		end
+
+		if not plr.Character.Head:FindFirstChild("ESP") then
+			local bill = Instance.new("BillboardGui", plr.Character.Head)
+			bill.Name = "ESP"
+			bill.Size = UDim2.new(0,120,0,30)
+			bill.AlwaysOnTop = true
+
+			local txt = Instance.new("TextLabel", bill)
+			txt.Size = UDim2.new(1,0,1,0)
+			txt.BackgroundTransparency = 1
+			txt.Text = plr.Name
+			txt.TextColor3 = Color3.fromRGB(200, 0, 255)
+			txt.TextStrokeTransparency = 0
+
+			table.insert(ESPObjects[plr], bill)
+		end
+	end)
+end
+
+for _,plr in pairs(Players:GetPlayers()) do
+	CreateESP(plr)
+end
+
+Players.PlayerAdded:Connect(CreateESP)
+Players.PlayerRemoving:Connect(ClearESP)
+
+local ESPButton = Instance.new("TextButton", ESPTab)
+ESPButton.Size = UDim2.new(0, 160, 0, 36)
+ESPButton.Position = UDim2.new(0, 10, 0, 10)
+ESPButton.Text = "Toggle ESP"
+ESPButton.BackgroundColor3 = Color3.fromRGB(130, 0, 190)
+ESPButton.TextColor3 = Color3.new(1,1,1)
+ESPButton.Font = Enum.Font.GothamBold
+Instance.new("UICorner", ESPButton)
+
+ESPButton.MouseButton1Click:Connect(function()
+	ESPEnabled = not ESPEnabled
+	if not ESPEnabled then
+		for plr,_ in pairs(ESPObjects) do
+			ClearESP(plr)
+		end
+	end
+end)
